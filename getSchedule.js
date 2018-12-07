@@ -3,8 +3,8 @@ function doPost(e) {
   if (prop.verificationToken != e.parameter.token) {
     throw new Error('Invalid token');
   }
-  var command = e.parameter.text;
-  var text = getEvents(command);
+  var requestText = e.parameter.text;
+  var text = makeResponseText(requestText);
   var response = { text: text };
 
   var output = ContentService.createTextOutput(JSON.stringify(response));
@@ -13,16 +13,11 @@ function doPost(e) {
   return output;
 }
 
-function getEvents(command) {
-  Logger.log("command: " + command);
-  var name = command.split(' ')[0];
-  var dateString = command.split(' ')[1];
-  if (dateString != undefined) {
-    var date = strToDate(dateString);
-  } else {
-    var date = new Date();
-  }
-  Logger.log("date: " + date);
+function makeResponseText(text) {
+  Logger.log("text: " + text);
+
+  // textからカレンダーIDを取得
+  var name = text.split(' ')[0];
   if (name.substr(0,1) == "@") {
     var userName = name.split('@')[1];
     var calendarId = getEmail(userName);
@@ -30,28 +25,37 @@ function getEvents(command) {
   Logger.log("calendarId: " + calendarId);
   var calendar = CalendarApp.getCalendarById(calendarId);
 
-  var events = calendar.getEventsForDay(date);
-  var yyyymmdd = YYYYMMdd(date);
-  var text = name + "さんの"　+ yyyymmdd + "の予定\n```";
+  // textから日付を取得
+  var dateString = text.split(' ')[1];
+  if (dateString != undefined) {
+    var date = strToDate(dateString);
+  } else {
+    var date = new Date();
+  }
+  Logger.log("date: " + date);
 
+  var events = calendar.getEventsForDay(date);
+
+  // Slack用のテキストを整形
+  var yyyymmdd = YYYYMMdd(date);
+  var responseText = name + "さんの"　+ yyyymmdd + "の予定\n```";
   if (events.length == 0) {
-    text += "なし";
+    responseText += "なし";
   } else {
     for (var i=0; i<events.length;i++) {
       var title = events[i].getTitle();
       var startTime = HHmm(events[i].getStartTime());
       var endTime = HHmm(events[i].getEndTime());
       if (startTime == "00:00" && endTime == "00:00") {
-        text += "\n終日: " + title;
+        responseText += "\n終日: " + title;
       } else {
-        text += "\n" + startTime + "〜" + endTime + ": " + title;
+        responseText += "\n" + startTime + "〜" + endTime + ": " + title;
       }
     }
   }
-  text += "\n```";
-  Logger.log(text);
-
-  return text
+  responseText += "\n```";
+  Logger.log(responseText);
+  return responseText
 }
 
 function getEmail(name) {
